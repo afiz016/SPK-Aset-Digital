@@ -302,15 +302,37 @@
                      @php
                          $c1 = $kriterias->where('kode_kriteria', 'C1')->first();
                          $c2 = $kriterias->where('kode_kriteria', 'C2')->first();
-                         $valC1 = $c1 ? ($aset->penilaians->where('kriteria_id', $c1->id)->first()?->nilai ?? 0) : 0;
-                         $valC2 = $c2 ? ($aset->penilaians->where('kriteria_id', $c2->id)->first()?->nilai ?? 0) : 0;
+
+                         // Stored values
+                         $storedValC1 = $c1 ? ($aset->penilaians->where('kriteria_id', $c1->id)->first()?->nilai ?? 0) : 0;
+                         $storedValC2 = $c2 ? ($aset->penilaians->where('kriteria_id', $c2->id)->first()?->nilai ?? 0) : 0;
+
+                         // Prefer live API data when available (does not mutate DB)
+                         $liveHarga = isset($liveData['harga_beli']) && $liveData['harga_beli'] > 0 ? $liveData['harga_beli'] : null;
+                         $liveVolume = isset($liveData['volume_24h']) && $liveData['volume_24h'] > 0 ? $liveData['volume_24h'] : null;
+
+                         $valC1 = $liveHarga ?? $storedValC1;
+                         $valC2 = $liveVolume ?? $storedValC2;
+
                          $coin = $aset->jenis_aset === 'opensea' ? 'ETH' : 'USD';
-                         
+                        
                          $rawData = json_decode($aset->raw_data, true) ?? [];
                          $previousFloor = $rawData['previous_floor_price'] ?? 0;
-                         $changeSinceLast = $previousFloor > 0 && $valC1 > 0 ? (($valC1 - $previousFloor) / $previousFloor) * 100 : 0;
-                         $changeColor = $changeSinceLast >= 0 ? 'text-success' : ($changeSinceLast < 0 ? 'text-danger' : 'text-muted');
-                         $changeSign = $changeSinceLast >= 0 ? '+' : '';
+
+                         // Prefer live 1d change from API or stored JSON when available
+                         $liveChange = isset($liveData['floor_change_1d']) ? $liveData['floor_change_1d'] : ($rawData['floor_change_1d'] ?? null);
+                          
+                         $hasChangeData = ($liveChange !== null || $previousFloor > 0);
+
+                         if ($liveChange !== null) {
+                             $changeSinceLast = $liveChange;
+                             $changeColor = $changeSinceLast > 0 ? 'text-success' : ($changeSinceLast < 0 ? 'text-danger' : 'text-muted');
+                             $changeSign = $changeSinceLast > 0 ? '+' : '';
+                         } else {
+                             $changeSinceLast = $previousFloor > 0 && $valC1 > 0 ? (($valC1 - $previousFloor) / $previousFloor) * 100 : 0;
+                             $changeColor = $changeSinceLast > 0 ? 'text-success' : ($changeSinceLast < 0 ? 'text-danger' : 'text-muted');
+                             $changeSign = $changeSinceLast > 0 ? '+' : '';
+                         }
                      @endphp
                      <div class="row text-center font-mono g-2">
                          <div class="col-4 border-end" style="border-color: var(--color-border-tertiary)!important;">
@@ -320,7 +342,7 @@
                          <div class="col-4 border-end" style="border-color: var(--color-border-tertiary)!important;">
                              <p class="text-muted text-uppercase mb-1" style="font-size: 10px; tracking-wider">1d Floor</p>
                              <span class="fw-bold {{ $changeColor }}" style="font-size: 15px;">
-                                 {{ $previousFloor > 0 ? $changeSign . number_format($changeSinceLast, 1) . '%' : '-' }}
+                                 {{ $hasChangeData ? $changeSign . number_format($changeSinceLast, 1) . '%' : '0.0%' }}
                              </span>
                          </div>
                          <div class="col-4">

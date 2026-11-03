@@ -13,7 +13,33 @@ class AsetDigitalController extends Controller
     {
         $asetDigitals = AsetDigital::with('penilaians.kriteria')->get();
         $kriterias = Kriteria::all();
-        return view('aset_digital.index', compact('asetDigitals', 'kriterias'));
+
+        // Fetch live data per asset (OpenSea & Steam). Note: this performs multiple HTTP calls.
+        $liveDataMap = [];
+        foreach ($asetDigitals as $aset) {
+            $platform = strtolower($aset->jenis_aset);
+            if ($platform === 'opensea') {
+                try {
+                    $f = MarketplaceApiService::fetchOpenSeaData($aset->nama_aset);
+                    if ($f && !isset($f['error'])) {
+                        $liveDataMap[$aset->id] = $f;
+                    }
+                } catch (\Exception $e) {
+                    // ignore failures per-item
+                }
+            } elseif ($platform === 'steam' || $platform === 'steam market') {
+                try {
+                    $f = MarketplaceApiService::fetchSteamMarketData('730', $aset->nama_aset);
+                    if ($f && !isset($f['error'])) {
+                        $liveDataMap[$aset->id] = $f;
+                    }
+                } catch (\Exception $e) {
+                    // ignore failures per-item
+                }
+            }
+        }
+
+        return view('aset_digital.index', compact('asetDigitals', 'kriterias', 'liveDataMap'));
     }
 
     public function create()
@@ -49,7 +75,27 @@ class AsetDigitalController extends Controller
     public function show($id)
     {
         $aset = AsetDigital::with('penilaians.kriteria')->findOrFail($id);
-        return view('aset_digital.show', compact('aset'));
+
+        $liveData = null;
+        try {
+            $platform = strtolower($aset->jenis_aset);
+            if ($platform === 'opensea') {
+                $f = MarketplaceApiService::fetchOpenSeaData($aset->nama_aset);
+                if ($f && !isset($f['error'])) {
+                    $liveData = $f;
+                }
+            } elseif ($platform === 'steam' || $platform === 'steam market') {
+                $f = MarketplaceApiService::fetchSteamMarketData('730', $aset->nama_aset);
+                if ($f && !isset($f['error'])) {
+                    $liveData = $f;
+                }
+            }
+        } catch (\Exception $e) {
+            // ignore live fetch errors for show page; fallback to stored values
+            $liveData = null;
+        }
+
+        return view('aset_digital.show', compact('aset', 'liveData'));
     }
 
     public function edit($id)

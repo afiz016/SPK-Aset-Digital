@@ -326,14 +326,29 @@
                                         $previousFloor = $rawData['previous_floor_price'] ?? 0;
                                         $c1Kriteria = $kriterias->where('kode_kriteria', 'C1')->first();
                                         $pC1 = $c1Kriteria ? $aset->penilaians->where('kriteria_id', $c1Kriteria->id)->first() : null;
-                                        $nilaiC1 = $pC1 ? $pC1->nilai : 0;
+                                        $storedNilaiC1 = $pC1 ? $pC1->nilai : 0;
+
+                                        // Prefer live value when available
+                                        $liveHarga = isset($liveDataMap[$aset->id]['harga_beli']) && $liveDataMap[$aset->id]['harga_beli'] > 0 ? $liveDataMap[$aset->id]['harga_beli'] : null;
+                                        $nilaiC1 = $liveHarga ?? $storedNilaiC1;
+
+                                        // Prefer live 1d change from API or stored JSON when available
+                                        $liveChange = isset($liveDataMap[$aset->id]['floor_change_1d']) ? $liveDataMap[$aset->id]['floor_change_1d'] : ($rawData['floor_change_1d'] ?? null);
                                         
-                                        $changeSinceLast = $previousFloor > 0 && $nilaiC1 > 0 ? (($nilaiC1 - $previousFloor) / $previousFloor) * 100 : 0;
-                                        $changeColor = $changeSinceLast >= 0 ? 'text-success' : ($changeSinceLast < 0 ? 'text-danger' : 'text-muted');
-                                        $changeSign = $changeSinceLast >= 0 ? '+' : '';
+                                        $hasChangeData = ($liveChange !== null || $previousFloor > 0);
+
+                                        if ($liveChange !== null) {
+                                            $changeSinceLast = $liveChange;
+                                            $changeColor = $changeSinceLast > 0 ? 'text-success' : ($changeSinceLast < 0 ? 'text-danger' : 'text-muted');
+                                            $changeSign = $changeSinceLast > 0 ? '+' : '';
+                                        } else {
+                                            $changeSinceLast = $previousFloor > 0 && $nilaiC1 > 0 ? (($nilaiC1 - $previousFloor) / $previousFloor) * 100 : 0;
+                                            $changeColor = $changeSinceLast > 0 ? 'text-success' : ($changeSinceLast < 0 ? 'text-danger' : 'text-muted');
+                                            $changeSign = $changeSinceLast > 0 ? '+' : '';
+                                        }
                                     @endphp
                                     
-                                    @if($previousFloor > 0)
+                                    @if($hasChangeData)
                                         <span class="font-mono fw-bold {{ $changeColor }}" style="font-size: 12px;">
                                             {{ $changeSign }}{{ number_format($changeSinceLast, 1) }}%
                                         </span>
@@ -351,10 +366,12 @@
                                 <p style="color: var(--color-text-secondary); font-size: 10px; margin-bottom: 2px;" class="text-uppercase fw-semibold tracking-wider">Harga Saat Ini</p>
                                 <p class="fw-bold font-mono mb-0" style="color: var(--accent-cyan); font-size: 17px;">
                                     @php
-                                        // Menarik data matriks kriteria C1 (Harga Beli) dari database secara real-time
+                                        // Menarik data matriks kriteria C1 (Harga Beli) - prioritaskan live
                                         $c1Kriteria = $kriterias->where('kode_kriteria', 'C1')->first();
                                         $pC1 = $c1Kriteria ? $aset->penilaians->where('kriteria_id', $c1Kriteria->id)->first() : null;
-                                        $nilaiC1 = $pC1 ? $pC1->nilai : 0;
+                                        $storedNilaiC1 = $pC1 ? $pC1->nilai : 0;
+                                        $liveHarga = isset($liveDataMap[$aset->id]['harga_beli']) && $liveDataMap[$aset->id]['harga_beli'] > 0 ? $liveDataMap[$aset->id]['harga_beli'] : null;
+                                        $nilaiC1 = $liveHarga ?? $storedNilaiC1;
                                     @endphp
                                     {{ is_numeric($nilaiC1) ? round($nilaiC1, 2) : $nilaiC1 }} 
                                     <span style="font-size: 11px; font-weight: 500;">{{ $platform === 'opensea' ? 'ETH' : 'USD' }}</span>

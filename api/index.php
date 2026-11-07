@@ -1,15 +1,10 @@
 <?php
 
-// Forward static requests ke public
-if (preg_match('/\.(?:png|jpg|jpeg|gif|css|js|ico)$/', $_SERVER['REQUEST_URI'])) {
-    return false;
-}
-
 require __DIR__ . '/../vendor/autoload.php';
 
 $app = require_once __DIR__ . '/../bootstrap/app.php';
 
-// Pastikan folder storage temporary dibuat di /tmp
+// Arahkan storage path ke /tmp bawaan Vercel
 $storagePath = '/tmp/storage';
 if (!is_dir($storagePath)) {
     mkdir($storagePath . '/framework/views', 0755, true);
@@ -24,7 +19,6 @@ if (!file_exists($sqlitePath)) {
     touch($sqlitePath);
 }
 
-// Jalankan Kernel Laravel
 $kernel = $app->make(Illuminate\Contracts\Http\Kernel::class);
 
 $response = $kernel->handle(
